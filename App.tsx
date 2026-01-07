@@ -5,7 +5,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BankingProvider } from './src/ganchos/useBankingStore';
 import { AppNavigator } from './src/navegação/AppNavigator';
 import { cores } from './src/tema/cores';
-import './global.css';
 
 const navTheme = {
   ...DefaultTheme,
