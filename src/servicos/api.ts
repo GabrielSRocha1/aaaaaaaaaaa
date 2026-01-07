@@ -27,19 +27,54 @@ export type CryptoPriceData = {
   last_updated: string;
 };
 
+// Criar instância do axios com configuração padrão
+const apiClient = axios.create({
+  timeout: 10000,
+  headers: {
+    'Accept': 'application/json',
+  },
+});
+
+// Interceptor para tratar erros
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      // Erro de resposta do servidor (4xx, 5xx)
+      console.error('Erro da API:', error.response.status, error.response.data);
+      if (error.response.status === 404) {
+        console.warn('Endpoint não encontrado (404). Verifique a URL da API.');
+      }
+    } else if (error.request) {
+      // Erro de requisição (sem resposta)
+      console.error('Sem resposta da API:', error.request);
+    } else {
+      // Erro ao configurar a requisição
+      console.error('Erro na configuração:', error.message);
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const cryptoApi = {
   // Buscar preços de múltiplas criptomoedas
   getCryptoPrices: async (cryptos: CryptoType[]): Promise<Record<CryptoType, CryptoPriceData>> => {
     try {
-      const ids = cryptos.map((crypto) => cryptoIds[crypto]).join(',');
-      const response = await axios.get(
-        `${COINGECKO_API_URL}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true&include_last_updated_at=true`
-      );
+      if (!cryptos || cryptos.length === 0) {
+        return {} as Record<CryptoType, CryptoPriceData>;
+      }
 
+      const ids = cryptos.map((crypto) => cryptoIds[crypto]).join(',');
+      
       // Buscar dados completos
-      const fullResponse = await axios.get(
+      const fullResponse = await apiClient.get(
         `${COINGECKO_API_URL}/coins/markets?ids=${ids}&vs_currency=usd&order=market_cap_desc&sparkline=false&price_change_percentage=24h`
       );
+
+      if (!fullResponse.data || fullResponse.data.length === 0) {
+        console.warn('Nenhum dado retornado da API CoinGecko');
+        return {} as Record<CryptoType, CryptoPriceData>;
+      }
 
       const result: Partial<Record<CryptoType, CryptoPriceData>> = {};
       fullResponse.data.forEach((coin: CryptoPriceData) => {
@@ -52,23 +87,36 @@ export const cryptoApi = {
       });
 
       return result as Record<CryptoType, CryptoPriceData>;
-    } catch (error) {
-      console.error('Erro ao buscar preços de criptomoedas:', error);
-      throw error;
+    } catch (error: any) {
+      console.error('Erro ao buscar preços de criptomoedas:', error?.message || error);
+      // Retornar objeto vazio em vez de lançar erro para não quebrar o app
+      return {} as Record<CryptoType, CryptoPriceData>;
     }
   },
 
   // Buscar preço de uma criptomoeda específica
-  getCryptoPrice: async (crypto: CryptoType): Promise<CryptoPriceData> => {
+  getCryptoPrice: async (crypto: CryptoType): Promise<CryptoPriceData | null> => {
     try {
       const id = cryptoIds[crypto];
-      const response = await axios.get(
+      if (!id) {
+        console.warn(`ID não encontrado para ${crypto}`);
+        return null;
+      }
+
+      const response = await apiClient.get(
         `${COINGECKO_API_URL}/coins/markets?ids=${id}&vs_currency=usd&order=market_cap_desc&sparkline=false&price_change_percentage=24h`
       );
+      
+      if (!response.data || response.data.length === 0) {
+        console.warn(`Nenhum dado retornado para ${crypto}`);
+        return null;
+      }
+      
       return response.data[0];
-    } catch (error) {
-      console.error(`Erro ao buscar preço de ${crypto}:`, error);
-      throw error;
+    } catch (error: any) {
+      console.error(`Erro ao buscar preço de ${crypto}:`, error?.message || error);
+      // Retornar null em vez de lançar erro
+      return null;
     }
   },
 
@@ -76,13 +124,18 @@ export const cryptoApi = {
   getCryptoHistory: async (crypto: CryptoType, days: number = 1) => {
     try {
       const id = cryptoIds[crypto];
-      const response = await axios.get(
+      if (!id) {
+        console.warn(`ID não encontrado para ${crypto}`);
+        return null;
+      }
+
+      const response = await apiClient.get(
         `${COINGECKO_API_URL}/coins/${id}/market_chart?vs_currency=usd&days=${days}`
       );
-      return response.data;
-    } catch (error) {
-      console.error(`Erro ao buscar histórico de ${crypto}:`, error);
-      throw error;
+      return response.data || null;
+    } catch (error: any) {
+      console.error(`Erro ao buscar histórico de ${crypto}:`, error?.message || error);
+      return null;
     }
   },
 };
@@ -92,4 +145,3 @@ export const convertUSDtoBRL = (usd: number): number => {
   const exchangeRate = 5.0; // Taxa aproximada, idealmente buscar de uma API
   return usd * exchangeRate;
 };
-

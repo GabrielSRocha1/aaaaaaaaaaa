@@ -43,11 +43,20 @@ export const TransferStartScreen = ({ navigation, route }: TransferStartScreenPr
   const loadCryptoPrice = async () => {
     try {
       const data = await cryptoApi.getCryptoPrice(cryptoSelecionada);
-      const priceBRL = convertUSDtoBRL(data.current_price);
-      setPrecoAtual(priceBRL);
-      setVariacao24h(data.price_change_percentage_24h || 0);
+      if (data) {
+        const priceBRL = convertUSDtoBRL(data.current_price);
+        setPrecoAtual(priceBRL);
+        setVariacao24h(data.price_change_percentage_24h || 0);
+      } else {
+        // Se não conseguir buscar, usar valores padrão
+        console.warn('Não foi possível carregar preço da API, usando valores padrão');
+        setPrecoAtual(0);
+        setVariacao24h(0);
+      }
     } catch (error) {
       console.error('Erro ao carregar preço:', error);
+      setPrecoAtual(0);
+      setVariacao24h(0);
     }
   };
 
